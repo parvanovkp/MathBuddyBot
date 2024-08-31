@@ -1,73 +1,64 @@
 import os
-import dspy
+import asyncio
+import logging
 from dotenv import load_dotenv
-import requests
-import json
+from openai import AsyncOpenAI
+
+# Setup logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
 # Get OpenAI API key from environment
-openai_api_key = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")
 
-if not openai_api_key:
+if not api_key:
     raise ValueError("OPENAI_API_KEY not found in environment variables")
 
-# Configure DSPY
-dspy.configure(api_key=openai_api_key)
+# Initialize AsyncOpenAI client
+client = AsyncOpenAI(api_key=api_key)
 
-class MathTutor(dspy.Module):
-    def __init__(self):
-        super().__init__()
+class MathTutor:
+    async def solve(self, query: str):
+        logger.info(f"MathTutor processing query: {query}")
         
-        # Explicitly create the language model and configure it
-        turbo = dspy.OpenAI(model="gpt-3.5-turbo-0125", api_key=os.environ["OPENAI_API_KEY"])
-        dspy.settings.configure(lm=turbo)
+        prompt = f"""
+        Solve this calculus problem step by step: {query}
 
-        # Initialize ChainOfThought components
-        self.understand_query = dspy.ChainOfThought("query -> problem_type, steps")
-        self.explain_step = dspy.ChainOfThought("step, previous_result -> explanation, wolfram_query")
-        self.summarize = dspy.ChainOfThought("all_steps, final_result -> summary")
+        Provide the following:
+        1. Problem type: [Type]
+        2. Steps:
+           Step 1: [Explanation]
+           Step 2: [Explanation]
+           Step 3: [Explanation]
+           Step 4: [Explanation]
+           Step 5: [Explanation]
+        3. Final answer: [Answer]
+        4. Summary: [Brief summary]
 
-    def forward(self, query):
-        print(f"Received query: {query}")
-        
-        # Understand the query and break it into steps using DSPY
-        try:
-            understanding = self.understand_query(query=query)
-            print(f"Understanding: {understanding}")
-        except Exception as e:
-            print(f"Error in understanding query: {e}")
-            return {"error": "Failed to process the query."}
-        
-        all_steps = []
-        for step in understanding.steps:
-            try:
-                previous_result_str = "\n".join(
-                    [f"Step {i+1}: {step_info['explanation']}" for i, step_info in enumerate(all_steps)]
-                ) if all_steps else "No previous steps."
-
-                print(f"Processing step: {step}")
-                step_info = self.explain_step(step=step, previous_result=previous_result_str)
-                print(f"Step Info: {step_info}")
-
-                all_steps.append({
-                    "explanation": step_info.explanation,
-                    "wolfram_query": step_info.wolfram_query
-                })
-            except Exception as e:
-                print(f"Error processing step: {e}")
-                return {"error": "Failed to process a step."}
+        Ensure all steps are complete, show all algebraic manipulations, and provide the final answer in its simplest form.
+        """
         
         try:
-            summary = self.summarize(all_steps=all_steps, final_result="To be computed by WolframAlpha")
-            print(f"Summary: {summary}")
+            response = await client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful math tutor specializing in calculus."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            
+            result = response.choices[0].message.content
+            logger.debug(f"Raw API response: {result}")
+            
+            return {
+                "solution": result
+            }
         except Exception as e:
-            print(f"Error in summarizing: {e}")
-            return {"error": "Failed to summarize the results."}
-        
-        return dspy.Prediction(
-            problem_type=understanding.problem_type,
-            steps=all_steps,
-            summary=summary.summary
-        )
+            logger.error(f"Error in MathTutor: {str(e)}")
+            raise
+
+# Initialize MathTutor
+tutor = MathTutor()

@@ -1,26 +1,52 @@
-# backend/math_processing.py
-
 import os
-import wolframalpha
+import aiohttp
+import logging
 from dotenv import load_dotenv
+
+# Setup logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
-# Initialize WolframAlpha client
-wolfram_client = wolframalpha.Client(os.getenv("WOLFRAM_ALPHA_APP_ID"))
+# Get WolframAlpha App ID
+WOLFRAM_ALPHA_APP_ID = os.getenv("WOLFRAM_ALPHA_APP_ID")
 
-def process_math_query(query: str):
-    """
-    Process a mathematical query using WolframAlpha and return the result and steps.
-    
-    :param query: A string representing the mathematical query
-    :return: A tuple containing the result and a list of steps
-    """
+if not WOLFRAM_ALPHA_APP_ID:
+    raise ValueError("WOLFRAM_ALPHA_APP_ID not found in environment variables")
+
+async def process_math_query(query: str):
     try:
-        res = wolfram_client.query(query)
-        result = next(res.results).text
-        steps = [f"Query processed by WolframAlpha: {query}", f"Result: {result}"]
-        return result, steps
+        async with aiohttp.ClientSession() as session:
+            params = {
+                'input': query,
+                'format': 'plaintext',
+                'output': 'JSON',
+                'appid': WOLFRAM_ALPHA_APP_ID
+            }
+            async with session.get('http://api.wolframalpha.com/v2/query', params=params) as response:
+                if response.status != 200:
+                    raise ValueError(f"WolframAlpha API returned status code {response.status}")
+                data = await response.json()
+
+            # Process the JSON response to extract the result
+            result = "Result not found"
+            for pod in data.get('queryresult', {}).get('pods', []):
+                if pod.get('title') in ['Result', 'Solution', 'Derivative', 'Indefinite integral', 'Numeric result', 'Rate']:
+                    result = pod.get('subpods', [{}])[0].get('plaintext', 'Result not found')
+                    break
+            
+            if result == "Result not found":
+                # If no specific result found, look for other relevant information
+                relevant_titles = ['Decimal approximation', 'Exact result', 'Simplified result', 'Input interpretation']
+                for pod in data.get('queryresult', {}).get('pods', []):
+                    if pod.get('title') in relevant_titles:
+                        result = pod.get('subpods', [{}])[0].get('plaintext', 'Result not found')
+                        break
+
+            logger.debug(f"WolframAlpha result for query '{query}': {result}")
+            return result
     except Exception as e:
-        raise ValueError(f"Error processing with WolframAlpha: {str(e)}")
+        logger.error(f"Error processing with WolframAlpha: {str(e)}")
+        raise

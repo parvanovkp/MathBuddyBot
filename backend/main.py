@@ -1,25 +1,20 @@
-# backend/main.py
-
 import logging
+import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from .nlp import MathTutor
-from .math_processing import process_math_query
+from .nlp import tutor
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Initialize MathTutor
-tutor = MathTutor()
-
 # CORS middleware setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins, update with specific frontend URLs in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,27 +25,23 @@ class Query(BaseModel):
 
 @app.post("/solve")
 async def solve_problem(query: Query):
+    start_time = time.time()
     try:
         logger.info(f"Received query: {query.question}")
-        # Process the query using MathTutor
-        result = tutor(query.question)
+        
+        result = await tutor.solve(query.question)
+        logger.debug(f"MathTutor result: {result}")
 
-        # For each step, get the WolframAlpha result
-        for step in result.steps:
-            wolfram_result, _ = process_math_query(step['wolfram_query'])
-            step['wolfram_result'] = wolfram_result
-
-        response = {
-            "problem_type": result.problem_type,
-            "steps": result.steps,
-            "summary": result.summary
-        }
-        logger.info(f"Processed query successfully: {response}")
-        return response
+        logger.info(f"Processed query successfully: {result}")
+        end_time = time.time()
+        logger.info(f"Total processing time: {end_time - start_time:.2f} seconds")
+        return result
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        end_time = time.time()
+        logger.info(f"Total processing time (with error): {end_time - start_time:.2f} seconds")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8080)
