@@ -1,12 +1,15 @@
+# main.py (in the backend folder)
+
 import os
 from dotenv import load_dotenv
 import logging
-import time
 import uuid
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any
+from openai import OpenAI
+import wolframalpha
 
 # Load environment variables
 load_dotenv()
@@ -17,10 +20,8 @@ for var in required_env_vars:
     if not os.getenv(var):
         raise ValueError(f"{var} not found in environment variables")
 
-from .nlp import tutor
-
 # Setup logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
@@ -35,87 +36,101 @@ app.add_middleware(
 )
 
 class Query(BaseModel):
-    question: str
+    message: str
 
 class SessionResponse(BaseModel):
-    session_id: str
-
-class StepResponse(BaseModel):
-    step: str
-    is_final: bool
-
-class AnswerValidation(BaseModel):
-    answer: str
-
-class HintRequest(BaseModel):
     session_id: str
 
 # In-memory session storage (replace with a database in production)
 sessions: Dict[str, Dict[str, Any]] = {}
 
-def get_session(session_id: str):
-    if session_id not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return sessions[session_id]
+# Initialize OpenAI and Wolfram Alpha
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+wolfram_client = wolframalpha.Client(os.getenv("WOLFRAM_ALPHA_APP_ID"))
+
+SYSTEM_PROMPT = """
+You are MathBuddyBot, an AI math tutor for topics from 3rd grade to Calculus 1. Your goal is to guide students through problem-solving steps and help them understand mathematical concepts.
+
+Key guidelines:
+1. Be extremely concise in every response. Avoid unnecessary explanations unless the student asks for more details.
+2. Adjust your level based on the complexity of the student's question. If unsure, ask for clarification about their math level.
+3. Use Wolfram Alpha for calculations and verifications. Always double-check your mathematical statements with Wolfram Alpha before presenting them to the student.
+4. Guide students through problem-solving rather than giving immediate answers.
+5. Encourage critical thinking by asking probing questions.
+6. Provide step-by-step explanations only when necessary.
+7. Use analogies and real-world examples sparingly and only when they significantly aid understanding.
+8. If a student is struggling, break down the problem into smaller, manageable parts.
+9. Regularly check the student's understanding by asking them to explain concepts back to you.
+
+Remember, your role is to facilitate learning, not just to provide answers. Use Wolfram Alpha to ensure accuracy in your explanations and calculations.
+
+To use Wolfram Alpha, include the phrase "Wolfram Alpha query: [your query]" in your response. The system will replace this with the Wolfram Alpha result.
+
+Current topic: {topic}
+Current difficulty level: {difficulty}
+"""
 
 @app.post("/start_session", response_model=SessionResponse)
 async def start_session():
     session_id = str(uuid.uuid4())
-    sessions[session_id] = {"problem": None, "steps": [], "current_step": 0}
+    sessions[session_id] = {
+        "messages": [],
+        "topic": "3rd Grade Math",
+        "difficulty": 1
+    }
     logger.info(f"Started new session: {session_id}")
     return {"session_id": session_id}
 
-@app.post("/solve")
-async def solve_problem(query: Query, session_id: str):
-    start_time = time.time()
-    try:
-        logger.info(f"Received query for session {session_id}: {query.question}")
-        session = get_session(session_id)
-        
-        result = await tutor.solve(query.question, session_id)
-        logger.debug(f"MathTutor result: {result}")
-
-        # Update session with problem and steps
-        session["problem"] = query.question
-        session["steps"] = result.get("steps", [])
-        session["current_step"] = 0
-
-        logger.info(f"Processed query successfully: {result}")
-        end_time = time.time()
-        logger.info(f"Total processing time: {end_time - start_time:.2f} seconds")
-        return result
-    except Exception as e:
-        logger.error(f"Error processing query: {str(e)}")
-        end_time = time.time()
-        logger.info(f"Total processing time (with error): {end_time - start_time:.2f} seconds")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/next_step", response_model=StepResponse)
-async def get_next_step(session_id: str):
-    session = get_session(session_id)
-    if session["current_step"] >= len(session["steps"]):
-        return {"step": "Problem solving complete", "is_final": True}
+@app.post("/chat")
+async def chat(query: Query, session_id: str):
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
     
-    step = session["steps"][session["current_step"]]
-    session["current_step"] += 1
-    return {"step": step, "is_final": session["current_step"] >= len(session["steps"])}
-
-@app.post("/validate_answer")
-async def validate_answer(validation: AnswerValidation, session_id: str):
-    session = get_session(session_id)
-    result = await tutor.validate_answer(session["problem"], validation.answer, session_id)
-    return {"is_correct": result["is_correct"], "feedback": result["feedback"]}
-
-@app.post("/get_hint", response_model=Dict[str, str])
-async def get_hint(hint_request: HintRequest):
-    session = get_session(hint_request.session_id)
-    hint = await tutor.get_hint(session["problem"], session["current_step"], hint_request.session_id)
-    return {"hint": hint}
-
-@app.get("/get_progress")
-async def get_progress(session_id: str):
-    progress = tutor.student_progress.get(session_id, {"topic": "3rd Grade", "difficulty": 1})
-    return progress
+    session = sessions[session_id]
+    session["messages"].append({"role": "user", "content": query.message})
+    
+    # Prepare the messages for the API call
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT.format(topic=session["topic"], difficulty=session["difficulty"])},
+        *session["messages"]
+    ]
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1000
+        )
+        
+        bot_message = response.choices[0].message.content
+        
+        # Check if Wolfram Alpha calculation is needed
+        while "Wolfram Alpha query:" in bot_message:
+            wolfram_query = bot_message.split("Wolfram Alpha query:")[-1].split("\n")[0].strip()
+            wolfram_result = wolfram_client.query(wolfram_query)
+            wolfram_pods = list(wolfram_result.pods)
+            if len(wolfram_pods) > 1:
+                wolfram_answer = next((pod.text for pod in wolfram_pods if pod.title == 'Result' or pod.title == 'Solution'), "No clear result found.")
+                bot_message = bot_message.replace(f"Wolfram Alpha query: {wolfram_query}", f"Wolfram Alpha result: {wolfram_answer}")
+            else:
+                bot_message = bot_message.replace(f"Wolfram Alpha query: {wolfram_query}", "Wolfram Alpha couldn't provide a clear answer for this query.")
+        
+        session["messages"].append({"role": "assistant", "content": bot_message})
+        
+        # Adjust difficulty based on the complexity of the question and response
+        if any(word in query.message.lower() for word in ['calculus', 'derivative', 'integral', 'limit']):
+            session["difficulty"] = max(session["difficulty"], 8)
+            session["topic"] = "Calculus 1"
+        elif any(word in query.message.lower() for word in ['algebra', 'equation', 'polynomial']):
+            session["difficulty"] = max(session["difficulty"], 5)
+            session["topic"] = "Algebra"
+        
+        return {"response": bot_message}
+    
+    except Exception as e:
+        logger.error(f"Error in chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
