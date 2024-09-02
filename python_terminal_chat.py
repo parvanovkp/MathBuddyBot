@@ -51,19 +51,38 @@ def chat_with_model():
                 data = response.json()
                 print("Bot:", data['solution'])
                 
-                # Process the user's response
-                user_response = input("You: ")
-                process_response = requests.post(f"{BASE_URL}/process_response",
-                                                 json={"response": user_response},
-                                                 params={"session_id": session_id})
-                if process_response.status_code == 200:
-                    process_data = process_response.json()
-                    if process_data['progress_made']:
-                        print("Bot: Great! You're making progress. " + process_data['next_step'])
+                while True:
+                    action = input("Enter 'hint' for a hint, 'validate' to check your answer, or 'next' to continue: ").lower()
+                    if action == 'hint':
+                        hint_response = requests.post(f"{BASE_URL}/get_hint", 
+                                                      json={"session_id": session_id})
+                        if hint_response.status_code == 200:
+                            print("Hint:", hint_response.json()['hint'])
+                        else:
+                            print("Failed to get a hint.")
+                    elif action == 'validate':
+                        answer = input("Enter your answer: ")
+                        validation_response = requests.post(f"{BASE_URL}/validate_answer", 
+                                                            json={"answer": answer},
+                                                            params={"session_id": session_id})
+                        if validation_response.status_code == 200:
+                            validation_data = validation_response.json()
+                            print(f"Is correct: {validation_data['is_correct']}")
+                            print(f"Feedback: {validation_data['feedback']}")
+                        else:
+                            print("Failed to validate the answer.")
+                    elif action == 'next':
+                        break
                     else:
-                        print("Bot: " + process_data['next_step'])
+                        print("Invalid input. Please enter 'hint', 'validate', or 'next'.")
+                
+                progress_response = requests.get(f"{BASE_URL}/get_progress", 
+                                                 params={"session_id": session_id})
+                if progress_response.status_code == 200:
+                    progress = progress_response.json()
+                    print(f"\nCurrent progress - Topic: {progress['topic']}, Difficulty: {progress['difficulty']}")
                 else:
-                    print("Failed to process the response.")
+                    print("Failed to get current progress.")
                 
             else:
                 print(f"Error: Received status code {response.status_code}")

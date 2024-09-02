@@ -27,7 +27,33 @@ MATH_TOPICS = {
     "3rd Grade": [
         "Basic Arithmetic", "Number Sense", "Fractions", "Measurement and Data", "Geometry"
     ],
-    # ... (keep all other grade levels)
+    "4th Grade": [
+        "Multi-digit Arithmetic", "Fractions and Decimals", "Measurement and Data", "Geometry"
+    ],
+    "5th Grade": [
+        "Operations with Fractions", "Decimals", "Volume", "Coordinate Plane"
+    ],
+    "6th Grade": [
+        "Ratios and Proportions", "Expressions and Equations", "Geometry", "Statistics"
+    ],
+    "7th Grade": [
+        "Rational Numbers", "Algebraic Expressions", "Geometry", "Probability"
+    ],
+    "8th Grade": [
+        "Linear Equations", "Functions", "Geometry", "Statistics"
+    ],
+    "Algebra I": [
+        "Solving Equations", "Graphing Functions", "Polynomials", "Quadratic Equations"
+    ],
+    "Geometry": [
+        "Congruence", "Similarity", "Right Triangles", "Circles", "Coordinate Geometry"
+    ],
+    "Algebra II": [
+        "Complex Numbers", "Polynomial Functions", "Rational Functions", "Exponential and Logarithmic Functions"
+    ],
+    "Pre-Calculus": [
+        "Trigonometry", "Vectors", "Matrices", "Conic Sections", "Limits"
+    ],
     "Calculus 1": [
         "Limits and Continuity", "Derivatives", "Applications of Derivatives", "Integrals", "Applications of Integrals"
     ]
@@ -40,38 +66,40 @@ class MathTutor:
         self.tools = [get_wolfram_tool()]
         self.tool_names = [tool.name for tool in self.tools]
         self.prompt = PromptTemplate(
-            input_variables=["input", "agent_scratchpad", "chat_history", "difficulty", "topic", "tools", "tool_names", "solution", "current_step"],
+            input_variables=["input", "agent_scratchpad", "chat_history", "difficulty", "topic", "tools", "tool_names"],
             template="""
 You are MathBuddyBot, an advanced AI math tutor specializing in topics from 3rd grade to Calculus 1. 
 Your goal is to guide students through problem-solving steps, provide hints, and validate their answers.
-Do not solve the problem outright. Instead, break it down into steps and ask guiding questions.
 
 Current difficulty level: {difficulty}
 Current topic: {topic}
-Current step in solution: {current_step}
-Full solution: {solution}
 
 Chat History:
 {chat_history}
 
 Current task: {input}
 
-Follow these guidelines:
-1) Break down the problem into smaller, manageable steps.
-2) Ask guiding questions to lead the student towards the solution.
-3) Provide hints about relevant concepts rather than giving away the answer.
-4) Adjust your explanation based on the current difficulty level and topic.
-5) Always encourage the student and provide positive reinforcement.
-6) If the student provides a correct step or partial solution, acknowledge it and guide them to the next step.
-7) If the student is stuck or provides an incorrect answer, provide a hint or ask a leading question.
-8) Use the solution and current step to track the student's progress and provide appropriate guidance.
+Think step-by-step about how to approach this task:
+1) Determine if the task requires mathematical computation or explanation.
+2) If computation is needed, consider using the Wolfram Alpha tool.
+3) If explanation is needed, formulate a clear and concise response.
+4) Always provide step-by-step guidance and explanations.
+5) Break down the solution into clear, numbered steps.
+6) Adjust your explanation based on the current difficulty level and topic.
 
 Available tools: {tool_names}
 Tool details: {tools}
 
 {agent_scratchpad}
 
-Your response should be conversational and natural, as if you were a human tutor speaking to the student.
+Your response should be in the following format:
+Thought: Your step-by-step reasoning
+Action: The action to take (either "Wolfram Alpha" or "Final Answer")
+Action Input: The input for the action
+Observation: The result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: The final answer to the original input question, including numbered steps for the solution
 """
         )
         
@@ -92,14 +120,7 @@ Your response should be conversational and natural, as if you were a human tutor
     async def solve(self, query: str, session_id: str) -> Dict[str, Any]:
         logger.info(f"MathTutor processing query for session {session_id}: {query}")
         try:
-            progress = self.student_progress.get(session_id, {"topic": "Calculus 1", "difficulty": 8, "current_step": 0, "solution": None})
-            
-            if progress["solution"] is None:
-                # Precompute the solution using Wolfram Alpha
-                wolfram_tool = get_wolfram_tool()
-                solution = await wolfram_tool.arun(query)
-                progress["solution"] = solution
-                self.student_progress[session_id] = progress
+            progress = self.student_progress.get(session_id, {"topic": "3rd Grade", "difficulty": 1})
             
             response = await self.agent_executor.ainvoke(
                 {
@@ -107,59 +128,30 @@ Your response should be conversational and natural, as if you were a human tutor
                     "difficulty": progress["difficulty"],
                     "topic": progress["topic"],
                     "tools": self.tools,
-                    "tool_names": self.tool_names,
-                    "solution": progress["solution"],
-                    "current_step": progress["current_step"]
+                    "tool_names": self.tool_names
                 }
             )
             logger.debug(f"MathTutor response: {response}")
             
-            return {"solution": response['output'], "steps": []}
+            steps = self.extract_steps(response['output'])
+            
+            self.update_progress(session_id, steps)
+            
+            return {"solution": response['output'], "steps": steps}
         except Exception as e:
             logger.error(f"Error in MathTutor: {str(e)}")
             raise
 
-    async def process_response(self, response: str, session_id: str) -> Dict[str, Any]:
-        progress = self.student_progress.get(session_id, {"topic": "Calculus 1", "difficulty": 8, "current_step": 0, "solution": None})
-        
-        # Use GPT to analyze the response and determine if the student has made progress
-        analysis_prompt = f"""
-        Student's response: {response}
-        Current step: {progress['current_step']}
-        Full solution: {progress['solution']}
-
-        Analyze the student's response and determine:
-        1. If the student has made progress towards the solution.
-        2. If any part of their response is correct.
-        3. What the next step or hint should be.
-
-        Provide your analysis in the following format:
-        Progress made: [Yes/No]
-        Correct parts: [List any correct parts of the student's response]
-        Next step: [Describe the next step or hint to provide]
-        """
-
-        analysis = await self.llm.agenerate([analysis_prompt])
-        analysis_text = analysis.generations[0][0].text.strip()
-
-        # Parse the analysis
-        analysis_lines = analysis_text.split('\n')
-        progress_made = analysis_lines[0].split(': ')[1].lower() == 'yes'
-        correct_parts = analysis_lines[1].split(': ')[1]
-        next_step = analysis_lines[2].split(': ')[1]
-
-        if progress_made:
-            progress["current_step"] += 1
-            self.student_progress[session_id] = progress
-
-        return {
-            "progress_made": progress_made,
-            "correct_parts": correct_parts,
-            "next_step": next_step
-        }
+    def extract_steps(self, response: str) -> List[str]:
+        steps = []
+        lines = response.split('\n')
+        for line in lines:
+            if line.strip().startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.')):
+                steps.append(line.strip())
+        return steps
 
     async def validate_answer(self, problem: str, answer: str, session_id: str) -> Dict[str, Any]:
-        progress = self.student_progress.get(session_id, {"topic": "Calculus 1", "difficulty": 8})
+        progress = self.student_progress.get(session_id, {"topic": "3rd Grade", "difficulty": 1})
         
         wolfram_result = await wolfram_validate_answer(problem, answer)
         
@@ -182,9 +174,9 @@ Your response should be conversational and natural, as if you were a human tutor
         Current topic: {progress['topic']}
         Current difficulty: {progress['difficulty']}
         
-        Provide encouraging feedback on the student's answer. If the answer is incorrect, give a hint or ask a guiding question to help them find the correct answer. If the answer is correct, provide positive reinforcement and possibly suggest a more advanced aspect of the topic to explore.
+        Provide detailed feedback on the student's answer. If the answer is incorrect, explain why and provide guidance on how to approach the problem correctly. If the answer is correct, provide positive reinforcement and possibly suggest a more advanced aspect of the topic to explore.
         
-        Your feedback should be tailored to the student's current topic and difficulty level.
+        Your feedback should be encouraging and tailored to the student's current topic and difficulty level.
         """
         
         response = await self.llm.agenerate([prompt])
@@ -192,7 +184,7 @@ Your response should be conversational and natural, as if you were a human tutor
         return feedback
 
     async def get_hint(self, problem: str, step: int, session_id: str) -> str:
-        progress = self.student_progress.get(session_id, {"topic": "Calculus 1", "difficulty": 8})
+        progress = self.student_progress.get(session_id, {"topic": "3rd Grade", "difficulty": 1})
         prompt = f"""
         For the problem: {problem}
         Provide a hint for step {step + 1} of the solution. 
@@ -210,19 +202,19 @@ Your response should be conversational and natural, as if you were a human tutor
         return hint
 
     def update_progress(self, session_id: str, steps: List[str], is_correct: bool = True):
-        progress = self.student_progress.get(session_id, {"topic": "Calculus 1", "difficulty": 8})
+        progress = self.student_progress.get(session_id, {"topic": "3rd Grade", "difficulty": 1})
         
         if is_correct:
             progress["difficulty"] = min(10, progress["difficulty"] + 1)
         else:
             progress["difficulty"] = max(1, progress["difficulty"] - 1)
         
-        if progress["difficulty"] >= 10:
+        if progress["difficulty"] >= 8:
             current_grade = progress["topic"].split()[0]
             next_grade = self.get_next_grade(current_grade)
             if next_grade:
                 progress["topic"] = next_grade
-                progress["difficulty"] = 8
+                progress["difficulty"] = 1
         
         self.student_progress[session_id] = progress
 

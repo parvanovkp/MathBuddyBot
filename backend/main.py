@@ -117,15 +117,6 @@ async def get_progress(session_id: str):
     progress = tutor.student_progress.get(session_id, {"topic": "3rd Grade", "difficulty": 1})
     return progress
 
-@app.post("/process_response")
-async def process_response(response: str, session_id: str):
-    try:
-        result = await tutor.process_response(response, session_id)
-        return result
-    except Exception as e:
-        logger.error(f"Error processing response: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
