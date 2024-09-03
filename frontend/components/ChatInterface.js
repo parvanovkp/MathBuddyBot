@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PlusCircle, Send } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
 
-const ChatInterface = ({ messages, onSendMessage, onNewChat }) => {
+const ChatInterface = ({ messages, onSendMessage, onNewChat, isTyping }) => {
   const [input, setInput] = useState('');
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(scrollToBottom, [messages]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -47,11 +54,17 @@ const ChatInterface = ({ messages, onSendMessage, onNewChat }) => {
             className={`mb-2 ${msg.type === 'user' ? 'text-right' : 'text-left'}`}
           >
             <div className={`inline-block max-w-[95%] ${msg.type === 'user' ? 'text-blue-600' : 'text-gray-800'}`}>
-              <div className="font-bold mb-1">{msg.type === 'user' ? 'You' : 'Bot'}</div>
+              <div className="font-bold mb-1">{msg.type === 'user' ? 'You' : 'MathBuddy'}</div>
               <div className="text-sm">{renderMessage(msg.content)}</div>
             </div>
           </div>
         ))}
+        {isTyping && (
+          <div className="text-left text-gray-500">
+            MathBuddy is typing...
+          </div>
+        )}
+        <div ref={messagesEndRef} />
       </div>
       <form onSubmit={handleSubmit} className="flex items-center">
         <button 
@@ -71,12 +84,14 @@ const ChatInterface = ({ messages, onSendMessage, onNewChat }) => {
           placeholder="Send a message. Press Shift+Enter for new line."
           aria-label="Message input"
           rows="1"
+          disabled={isTyping}
         />
         <button 
           type="submit" 
           className="p-2 bg-blue-500 text-white rounded-r hover:bg-blue-600"
           aria-label="Send message"
           title="Send message"
+          disabled={isTyping}
         >
           <Send size={24} />
         </button>

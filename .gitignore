@@ -8,6 +8,7 @@ __pycache__/
 
 # Environments
 .env
+.env.local
 
 # OS generated files
 .DS_Store
@@ -21,3 +22,10 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+
+# Logs
+*.log
+
+# OpenAI and Wolfram Alpha logs
+openai_logs/
+wolfram_logs/

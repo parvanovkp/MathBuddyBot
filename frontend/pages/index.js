@@ -1,44 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Layout from '../components/Layout';
 import ChatInterface from '../components/ChatInterface';
 import SuggestedQuestions from '../components/SuggestedQuestions';
 import 'katex/dist/katex.min.css';
 
-
 export default function Home() {
   const [messages, setMessages] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
+  const [isTyping, setIsTyping] = useState(false);
 
-  const handleSendMessage = async (message) => {
-    setMessages([...messages, { type: 'user', content: message }]);
-    // Here you would call your API to get the response
-    // For now, we'll just echo the message
-    setMessages(prevMessages => [...prevMessages, { type: 'bot', content: `You asked: ${message}` }]);
+  useEffect(() => {
+    startNewSession();
+  }, []);
+
+  const startNewSession = async () => {
+    try {
+      const response = await fetch('/api/start_session', { method: 'POST' });
+      const data = await response.json();
+      setSessionId(data.session_id);
+      setMessages([]);
+    } catch (error) {
+      console.error('Error starting new session:', error);
+    }
   };
 
-  const handleNewChat = () => {
-    setMessages([]);
+  const handleSendMessage = async (message) => {
+    const userMessage = { type: 'user', content: message };
+    setMessages(prevMessages => [...prevMessages, userMessage]);
+    setIsTyping(true);
+    
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message, session_id: sessionId }),
+      });
+      
+      const data = await response.json();
+      
+      // Simulate typing effect
+      let typedMessage = '';
+      const fullMessage = data.response;
+      
+      setMessages(prevMessages => [...prevMessages, { type: 'bot', content: '' }]);
+
+      for (let i = 0; i < fullMessage.length; i++) {
+        typedMessage += fullMessage[i];
+        setMessages(prevMessages => [
+          ...prevMessages.slice(0, -1),
+          { type: 'bot', content: typedMessage }
+        ]);
+        await new Promise(resolve => setTimeout(resolve, 20)); // Adjust typing speed here
+      }
+      
+      setIsTyping(false);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setMessages(prevMessages => [...prevMessages, { type: 'bot', content: 'Sorry, there was an error processing your request.' }]);
+      setIsTyping(false);
+    }
   };
 
   return (
     <Layout>
       <Head>
-        <title>Math AI Chatbot</title>
+        <title>MathBuddyBot</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
       <main className="p-6 max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Welcome to MathBuddyBot!</h1>
         <p className="mb-6">
-          This is an open source AI chatbot built with Next.js, 
-          specialized in answering math questions up to the calculus 2 level.
+          This is an AI chatbot specialized in tutoring math from 3rd grade to Calculus 1 level.
         </p>
 
         <SuggestedQuestions onQuestionClick={handleSendMessage} />
         <ChatInterface 
           messages={messages} 
           onSendMessage={handleSendMessage} 
-          onNewChat={handleNewChat}
+          onNewChat={startNewSession}
+          isTyping={isTyping}
         />
       </main>
     </Layout>
