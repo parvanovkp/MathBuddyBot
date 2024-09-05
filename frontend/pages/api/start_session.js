@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     const response = await fetch(`${backendUrl}/start_session`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.API_KEY,
+        'X-API-Key': process.env.NEXT_PUBLIC_API_KEY,
       },
     });
 

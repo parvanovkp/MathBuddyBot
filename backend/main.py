@@ -2,19 +2,22 @@ import os
 from dotenv import load_dotenv
 import logging
 import uuid
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any
 from openai import OpenAI
 import requests
 import re
+from fastapi.security import APIKeyHeader
+from starlette.status import HTTP_403_FORBIDDEN
+from datetime import datetime, timedelta
 
 # Load environment variables
 load_dotenv()
 
 # Check for required environment variables
-required_env_vars = ["OPENAI_API_KEY", "WOLFRAM_ALPHA_APP_ID"]
+required_env_vars = ["OPENAI_API_KEY", "WOLFRAM_ALPHA_APP_ID", "API_KEY", "FRONTEND_URL"]
 for var in required_env_vars:
     if not os.getenv(var):
         raise ValueError(f"{var} not found in environment variables")
@@ -28,7 +31,7 @@ app = FastAPI()
 # CORS middleware setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Adjust this to your frontend URL
+    allow_origins=[os.getenv("FRONTEND_URL")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,6 +46,23 @@ class SessionResponse(BaseModel):
 
 # In-memory session storage (replace with a database in production)
 sessions: Dict[str, Dict[str, Any]] = {}
+
+# Rate limiting
+RATE_LIMIT = 50  # requests per day
+rate_limit_data: Dict[str, Dict[str, Any]] = {}
+
+# API key security
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def get_api_key(api_key_header: str = Depends(api_key_header)):
+    expected_api_key = os.getenv("API_KEY")
+    logger.info(f"Received API Key: {api_key_header}, Expected: {expected_api_key}")  # Debug print
+    if api_key_header == expected_api_key:
+        return api_key_header
+    raise HTTPException(
+        status_code=HTTP_403_FORBIDDEN, detail="Could not validate API KEY"
+    )
 
 # Initialize OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -122,8 +142,19 @@ def format_katex(text: str) -> str:
     text = re.sub(r'\$\$(.+?)\$\$', r'$$\1$$', text)
     return text
 
+def check_rate_limit(session_id: str):
+    now = datetime.now()
+    if session_id not in rate_limit_data:
+        rate_limit_data[session_id] = {"count": 1, "reset_time": now + timedelta(days=1)}
+    elif rate_limit_data[session_id]["reset_time"] < now:
+        rate_limit_data[session_id] = {"count": 1, "reset_time": now + timedelta(days=1)}
+    elif rate_limit_data[session_id]["count"] >= RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+    else:
+        rate_limit_data[session_id]["count"] += 1
+
 @app.post("/start_session", response_model=SessionResponse)
-async def start_session():
+async def start_session(api_key: str = Depends(get_api_key)):
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
         "messages": [],
@@ -133,9 +164,11 @@ async def start_session():
     return {"session_id": session_id}
 
 @app.post("/chat")
-async def chat(query: Query):
+async def chat(query: Query, api_key: str = Depends(get_api_key)):
     if query.session_id not in sessions:
         raise HTTPException(status_code=404, detail="Session not found")
+    
+    check_rate_limit(query.session_id)
     
     session = sessions[query.session_id]
     session["messages"].append({"role": "user", "content": query.message})
@@ -188,8 +221,9 @@ async def chat(query: Query):
         return {"response": bot_message}
     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error processing request: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
