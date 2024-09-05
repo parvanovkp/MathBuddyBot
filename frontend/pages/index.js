@@ -95,7 +95,7 @@ export default function Home() {
       <main className="p-4 max-w-6xl mx-auto">
         <h1 className="text-2xl font-bold mb-2">Welcome to MathBuddyBot!</h1>
         <p className="mb-4">
-          Hi there! I'm MathBuddyBot, your friendly AI math tutor. I'm here to help you with everything from basic arithmetic to Calculus 1. What would you like to learn today?
+          Hi there! I&apos;m MathBuddyBot, your friendly AI math tutor. I&apos;m here to help you with everything from basic arithmetic to Calculus 1. What would you like to learn today?
         </p>
 
         {error && <p className="text-red-500 mb-4">{error}</p>}
