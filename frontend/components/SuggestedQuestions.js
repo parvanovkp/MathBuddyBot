@@ -3,30 +3,28 @@ import LatexRenderer from './LatexRenderer';
 
 const SuggestedQuestions = ({ onQuestionClick }) => {
   const questions = [
-    { text: "What is the derivative of $x^2$?", latex: null },
-    { text: "Solve for x: $2x + 5 = 13$", latex: null },
-    { text: "What is the integral of $\\sin(x)$?", latex: null },
+    { text: "Can you explain the concept of derivatives?", latex: null },
+    { text: "How do I approach solving linear equations?", latex: null },
+    { text: "What's the intuition behind integration?", latex: null },
     { 
-      text: "Explain the quadratic formula:", 
+      text: "Could you break down the quadratic formula?", 
       latex: "ax^2 + bx + c = 0" 
     }
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4 mb-6" aria-label="Suggested questions">
+    <div className="grid grid-cols-2 gap-3 mb-4" aria-label="Suggested questions">
       {questions.map((question, index) => (
         <button
           key={index}
-          onClick={() => onQuestionClick(question.text + (question.latex ? ` $$${question.latex}$$.` : ''))}
-          className="bg-white p-4 rounded-lg shadow-md text-left hover:bg-gray-50 transition-colors"
+          onClick={() => onQuestionClick(question.text + (question.latex ? ` $$${question.latex}$$` : ''))}
+          className="bg-white py-2 px-3 rounded-lg shadow-sm text-left hover:bg-gray-50 transition-colors text-sm border border-gray-200"
           aria-label={`Ask question: ${question.text}`}
         >
-          <div>{question.text.split('$').map((part, i) => 
-            i % 2 === 0 ? part : <LatexRenderer key={i}>{part}</LatexRenderer>
-          )}</div>
+          <div>{question.text}</div>
           {question.latex && (
-            <div className="mt-2 text-center">
-              <LatexRenderer>{question.latex}</LatexRenderer>.
+            <div className="mt-1 text-center">
+              <LatexRenderer>{question.latex}</LatexRenderer>
             </div>
           )}
         </button>

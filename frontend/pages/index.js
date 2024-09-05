@@ -71,10 +71,10 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className="p-6 max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold mb-4">Welcome to MathBuddyBot!</h1>
-        <p className="mb-6">
-          This is an AI chatbot specialized in tutoring math from 3rd grade to Calculus 1 level.
+      <main className="p-4 max-w-6xl mx-auto">
+        <h1 className="text-2xl font-bold mb-2">Welcome to MathBuddyBot!</h1>
+        <p className="mb-4">
+          Hi there! I'm MathBuddyBot, your friendly AI math tutor. I'm here to help you with everything from basic arithmetic to Calculus 1. What would you like to learn today?
         </p>
 
         <SuggestedQuestions onQuestionClick={handleSendMessage} />

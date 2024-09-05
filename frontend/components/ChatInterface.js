@@ -42,7 +42,7 @@ const ChatInterface = ({ messages, onSendMessage, onNewChat, isTyping }) => {
   };
 
   return (
-    <div className="mt-6">
+    <div className="mt-4">
       <div 
         className="bg-white rounded-lg p-4 h-64 overflow-y-auto mb-4 border border-gray-200"
         aria-live="polite"
@@ -53,7 +53,7 @@ const ChatInterface = ({ messages, onSendMessage, onNewChat, isTyping }) => {
             key={index} 
             className={`mb-2 ${msg.type === 'user' ? 'text-right' : 'text-left'}`}
           >
-            <div className={`inline-block max-w-[95%] ${msg.type === 'user' ? 'text-blue-600' : 'text-gray-800'}`}>
+            <div className={`inline-block max-w-[80%] ${msg.type === 'user' ? 'text-blue-600' : 'text-gray-800'}`}>
               <div className="font-bold mb-1">{msg.type === 'user' ? 'You' : 'MathBuddy'}</div>
               <div className="text-sm">{renderMessage(msg.content)}</div>
             </div>
@@ -80,20 +80,19 @@ const ChatInterface = ({ messages, onSendMessage, onNewChat, isTyping }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="flex-grow p-2 border border-gray-300 rounded-l resize-none"
+          className="flex-grow p-2 border border-gray-300 rounded-l resize-none h-10 pt-1.5"
           placeholder="Send a message. Press Shift+Enter for new line."
           aria-label="Message input"
-          rows="1"
           disabled={isTyping}
         />
         <button 
           type="submit" 
-          className="p-2 bg-blue-500 text-white rounded-r hover:bg-blue-600"
+          className="p-2 bg-blue-500 text-white rounded-r hover:bg-blue-600 h-10"
           aria-label="Send message"
           title="Send message"
           disabled={isTyping}
         >
-          <Send size={24} />
+          <Send size={20} />
         </button>
       </form>
     </div>
