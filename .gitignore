@@ -26,6 +26,23 @@ Thumbs.db
 # Logs
 *.log
 
+# misc
+*.pem
+
 # OpenAI and Wolfram Alpha logs
 openai_logs/
 wolfram_logs/
+
+# Frontend specific
+/frontend/coverage
+/frontend/build
+/frontend/node_modules
+/frontend/.next
+/frontend/out
+/frontend/.vercel
+/frontend/*.tsbuildinfo
+/frontend/next-env.d.ts
+
+# Backend specific
+/backend/__pycache__
+/backend/.env

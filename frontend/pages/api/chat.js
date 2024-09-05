@@ -17,6 +17,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Key': process.env.API_KEY,
       },
       body: JSON.stringify({ message, session_id }),
     });
@@ -24,6 +25,9 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Backend API error:', response.status, errorText);
+      if (response.status === 429) {
+        return res.status(429).json({ error: 'Rate limit exceeded. Please try again later.' });
+      }
       throw new Error(`Backend API request failed: ${response.status} ${errorText}`);
     }
 

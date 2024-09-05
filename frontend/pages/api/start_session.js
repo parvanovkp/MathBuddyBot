@@ -8,10 +8,15 @@ export default async function handler(req, res) {
     
     const response = await fetch(`${backendUrl}/start_session`, {
       method: 'POST',
+      headers: {
+        'X-API-Key': process.env.API_KEY,
+      },
     });
 
     if (!response.ok) {
-      throw new Error('Backend API request failed');
+      const errorText = await response.text();
+      console.error('Backend API error:', response.status, errorText);
+      throw new Error(`Backend API request failed: ${response.status} ${errorText}`);
     }
 
     const data = await response.json();
