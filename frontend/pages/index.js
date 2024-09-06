@@ -1,3 +1,5 @@
+// index.js
+
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Layout from '../components/Layout';
@@ -93,8 +95,8 @@ export default function Home() {
       </Head>
 
       <main className="p-4 max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold mb-2">Welcome to MathBuddyBot!</h1>
-        <p className="mb-4">
+        <h1 className="text-2xl font-bold mb-2 text-black dark:text-white">Welcome to MathBuddyBot!</h1>
+        <p className="mb-4 text-black dark:text-gray-300">
           Hi there! I&apos;m MathBuddyBot, your friendly AI math tutor. I&apos;m here to help you with everything from basic arithmetic to Calculus 1. What would you like to learn today?
         </p>
 

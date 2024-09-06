@@ -1,3 +1,5 @@
+// Layout.js
+
 import React from 'react';
 
 const Layout = ({ children }) => {
@@ -13,8 +15,8 @@ const Layout = ({ children }) => {
       }}
     >
       <div className="relative py-1 sm:max-w-7xl sm:mx-auto w-full px-2">
-        <div className="relative px-3 py-3 bg-white shadow-lg sm:rounded-3xl sm:p-6">
-          <div className="max-w-full mx-auto">
+        <div className="relative px-3 py-3 bg-white dark:bg-gray-900 shadow-lg sm:rounded-3xl sm:p-6">
+          <div className="max-w-full mx-auto text-black dark:text-white">
             {children}
           </div>
         </div>

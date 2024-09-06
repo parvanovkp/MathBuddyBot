@@ -44,7 +44,7 @@ const ChatInterface = ({ messages, onSendMessage, onNewChat, isTyping }) => {
   return (
     <div className="mt-4">
       <div 
-        className="bg-white rounded-lg p-4 h-64 overflow-y-auto mb-4 border border-gray-200"
+        className="bg-white dark:bg-gray-800 rounded-lg p-4 h-64 overflow-y-auto mb-4 border border-gray-200 dark:border-gray-600"
         aria-live="polite"
         aria-label="Chat messages"
       >
@@ -53,14 +53,14 @@ const ChatInterface = ({ messages, onSendMessage, onNewChat, isTyping }) => {
             key={index} 
             className={`mb-2 ${msg.type === 'user' ? 'text-right' : 'text-left'}`}
           >
-            <div className={`inline-block max-w-[80%] ${msg.type === 'user' ? 'text-blue-600' : 'text-gray-800'}`}>
+            <div className={`inline-block max-w-[80%] ${msg.type === 'user' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-800 dark:text-gray-200'}`}>
               <div className="font-bold mb-1">{msg.type === 'user' ? 'You' : 'MathBuddy'}</div>
               <div className="text-sm">{renderMessage(msg.content)}</div>
             </div>
           </div>
         ))}
         {isTyping && (
-          <div className="text-left text-gray-500">
+          <div className="text-left text-gray-500 dark:text-gray-400">
             MathBuddy is typing...
           </div>
         )}
@@ -69,7 +69,7 @@ const ChatInterface = ({ messages, onSendMessage, onNewChat, isTyping }) => {
       <form onSubmit={handleSubmit} className="flex items-center">
         <button 
           type="button" 
-          className="p-2 text-gray-500 hover:text-gray-700"
+          className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
           aria-label="New chat"
           title="New chat"
           onClick={onNewChat}
@@ -80,14 +80,14 @@ const ChatInterface = ({ messages, onSendMessage, onNewChat, isTyping }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="flex-grow p-2 border border-gray-300 rounded-l resize-none h-10 pt-1.5"
+          className="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded-l resize-none h-10 pt-1.5 bg-white dark:bg-gray-800 text-black dark:text-white"
           placeholder="Send a message. Press Shift+Enter for new line."
           aria-label="Message input"
           disabled={isTyping}
         />
         <button 
           type="submit" 
-          className="p-2 bg-blue-500 text-white rounded-r hover:bg-blue-600 h-10"
+          className="p-2 bg-blue-500 dark:bg-blue-600 text-white rounded-r hover:bg-blue-600 dark:hover:bg-blue-700 h-10"
           aria-label="Send message"
           title="Send message"
           disabled={isTyping}
