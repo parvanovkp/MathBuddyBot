@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 import logging
 import uuid
+import json
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -68,23 +69,18 @@ async def get_api_key(api_key_header: str = Depends(api_key_header)):
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 SYSTEM_PROMPT = """
-You are MathBuddy, an AI math tutor specializing in topics from 3rd grade to Calculus 1. Your role is to guide and support students in their learning process, not to solve problems for them. Adapt your language and explanations to the student's level, which can range from elementary school math to high school calculus. Focus on the following:
+You are MathBuddy, a concise AI math tutor for topics from 3rd grade to Calculus 1. Your primary goals are:
 
-1. Use KaTeX syntax for all mathematical expressions. Inline formulas should be enclosed in single dollar signs ($...$) and display formulas in double dollar signs ($$...$$).
-2. Be concise and encouraging in your responses.
-3. Instead of solving problems, ask guiding questions to help students reach the solution themselves.
-4. Break down complex problems into smaller, manageable steps.
-5. Provide hints and explanations about concepts, but avoid giving direct answers.
-6. When you need to verify a mathematical statement or calculation, use the format: "Wolfram Alpha query: [query]". Format the query exactly as it should be input into Wolfram Alpha, without any additional text or explanation.
-7. After receiving a Wolfram Alpha result, interpret it for the student. Confirm if the student's answer is correct and provide the verified result in LaTeX format, enclosed in double dollar signs ($$...$$).
-8. If a student is stuck, suggest reviewing specific concepts or offer a small hint to move forward.
-9. Regularly check the student's understanding by asking them to explain concepts back to you.
-10. Adjust your language and explanation complexity based on the current topic and difficulty level.
+1. Be extremely brief and to the point in all responses.
+2. Use only KaTeX syntax for formatting. Inline formulas use single dollar signs ($...$) and display formulas use double dollar signs ($$...$$).
+3. Do not use any Markdown formatting. Only plain text and KaTeX are allowed.
+4. Guide students with brief questions and hints, never solving problems directly.
+5. For calculations, use: "Wolfram Alpha query: [query]" format.
+6. After Wolfram Alpha results, briefly interpret and confirm correctness.
+7. Adapt complexity to the student's level without mentioning difficulty explicitly.
+8. Silently assess topic and difficulty (1-10) after each response to adjust your approach.
 
-Remember, your goal is to facilitate learning and critical thinking in mathematics from 3rd grade to Calculus 1.
-
-Current topic: {topic}
-Current difficulty level: {difficulty}
+Remember: Brevity is key. Use KaTeX only. No Markdown.
 """
 
 def query_wolfram_alpha(query: str) -> str:
@@ -135,13 +131,6 @@ def extract_wolfram_result(wolfram_response: str) -> str:
     except Exception as e:
         return "Error extracting result from Wolfram Alpha response."
 
-def format_katex(text: str) -> str:
-    # Replace inline math delimiters
-    text = re.sub(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)', r'$\1$', text)
-    # Replace display math delimiters
-    text = re.sub(r'\$\$(.+?)\$\$', r'$$\1$$', text)
-    return text
-
 def check_rate_limit(session_id: str):
     now = datetime.now()
     if session_id not in rate_limit_data:
@@ -157,7 +146,7 @@ def check_rate_limit(session_id: str):
 async def start_session(api_key: str = Depends(get_api_key)):
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
-        "messages": [],
+        "messages": [{"role": "system", "content": SYSTEM_PROMPT}],
         "topic": "General Math",
         "difficulty": 5  # Start at a middle difficulty
     }
@@ -173,18 +162,12 @@ async def chat(query: Query, api_key: str = Depends(get_api_key)):
     session = sessions[query.session_id]
     session["messages"].append({"role": "user", "content": query.message})
     
-    # Prepare the messages for the API call
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT.format(topic=session["topic"], difficulty=session["difficulty"])},
-        *session["messages"]
-    ]
-    
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
-            messages=messages,
+            model="gpt-4o",
+            messages=session["messages"],
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=2000
         )
         
         bot_message = response.choices[0].message.content
@@ -197,26 +180,31 @@ async def chat(query: Query, api_key: str = Depends(get_api_key)):
                 extracted_result = extract_wolfram_result(wolfram_result)
                 bot_message = bot_message.replace(f"Wolfram Alpha query: {wolfram_query}", extracted_result)
         
-        # Format the message with KaTeX syntax
-        bot_message = format_katex(bot_message)
-        
         session["messages"].append({"role": "assistant", "content": bot_message})
         
-        # Adjust difficulty and topic based on the complexity of the question
-        if any(word in query.message.lower() for word in ['calculus', 'derivative', 'integral', 'limit']):
-            session["difficulty"] = 10
-            session["topic"] = "Calculus 1"
-        elif any(word in query.message.lower() for word in ['algebra', 'equation', 'polynomial', 'function']):
-            session["difficulty"] = max(session["difficulty"], 7)
-            session["topic"] = "Algebra"
-        elif any(word in query.message.lower() for word in ['geometry', 'triangle', 'circle', 'area']):
-            session["difficulty"] = max(session["difficulty"], 6)
-            session["topic"] = "Geometry"
-        elif any(word in query.message.lower() for word in ['fraction', 'decimal', 'percentage']):
-            session["difficulty"] = max(session["difficulty"], 4)
-            session["topic"] = "Fractions and Decimals"
-        else:
-            session["difficulty"] = max(3, session["difficulty"])  # Ensure we don't go below 3rd grade level
+        # Use AI to estimate difficulty and topic
+        estimation_prompt = f"""
+        Based on the conversation history and the last user query, estimate the current math topic and difficulty level (1-10).
+        Respond with a JSON object containing 'topic' and 'difficulty' keys.
+        Last user query: {query.message}
+        """
+        
+        estimation_response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an AI that estimates math topics and difficulty levels."},
+                {"role": "user", "content": estimation_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=100
+        )
+        
+        try:
+            estimation = json.loads(estimation_response.choices[0].message.content)
+            session["topic"] = estimation.get("topic", session["topic"])
+            session["difficulty"] = estimation.get("difficulty", session["difficulty"])
+        except json.JSONDecodeError:
+            logger.error("Failed to parse AI estimation response")
         
         return {"response": bot_message}
     
