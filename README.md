@@ -16,27 +16,22 @@ graph TD
     subgraph Frontend
     A[Next.js App]
     end
-
     subgraph "API Layer"
     B[API Routes]
     end
-
     subgraph "Backend Server"
     C[FastAPI]
     D[Session Management]
     E[Rate Limiting]
     end
-
     subgraph "AI Processing"
     F[OpenAI GPT-4o]
     G[GPT-3.5-Turbo<br>Result Extractor]
     H[GPT-3.5-Turbo<br>Difficulty Estimator]
     end
-
     subgraph "External Services"
     I[Wolfram Alpha API]
     end
-
     A -->|User Interaction| B
     B -->|Proxy Requests| C
     C --> D
@@ -49,13 +44,11 @@ graph TD
     G -->|Formatted Result| C
     C -->|Estimate Difficulty| H
     H -->|Update Session| D
-
     classDef frontend fill:#e0f7fa,stroke:#006064;
     classDef api fill:#fff9c4,stroke:#fbc02d;
     classDef backend fill:#e8f5e9,stroke:#2e7d32;
     classDef ai fill:#f3e5f5,stroke:#6a1b9a;
     classDef external fill:#fbe9e7,stroke:#bf360c;
-
     class A frontend;
     class B api;
     class C,D,E backend;
