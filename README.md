@@ -12,6 +12,7 @@ MathBuddy is an AI-powered math tutoring application designed to assist students
 
 ## Architecture
 
+```mermaid
 graph TD
     subgraph Frontend
     A[Next.js App]
@@ -54,6 +55,7 @@ graph TD
     class C,D,E backend;
     class F,G,H ai;
     class I external;
+```
 
 MathBuddy uses a Next.js frontend for the user interface and a FastAPI backend to manage AI models and external services.
 
