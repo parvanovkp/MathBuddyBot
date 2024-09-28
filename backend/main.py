@@ -142,6 +142,10 @@ def check_rate_limit(session_id: str):
     else:
         rate_limit_data[session_id]["count"] += 1
 
+@app.get("/health")
+async def health_check():
+    return {"status": "OK", "timestamp": datetime.now().isoformat()}
+
 @app.post("/start_session", response_model=SessionResponse)
 async def start_session(api_key: str = Depends(get_api_key)):
     session_id = str(uuid.uuid4())
